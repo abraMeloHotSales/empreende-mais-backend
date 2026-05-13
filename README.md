@@ -183,4 +183,3 @@ empreendeMaisBackend/
 O frontend (`empreendeMaisMobile`) já está integrado com esta API.
 A variável `VITE_API_URL=http://localhost:8000/api` no `.env` do frontend aponta para este backend.
 
-Se o backend não estiver rodando, o frontend exibe dados estáticos de fallback automaticamente.
