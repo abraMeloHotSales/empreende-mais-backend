@@ -3,68 +3,119 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Perfil;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-
-// TODO (quando banco disponível):
-//  - updateProfile: $request->user()->update([...])
-//  - updateSecurity: Hash::check() + $request->user()->update(['password' => Hash::make(...)])
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class ConfiguracoesController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $user = $request->user();
         return response()->json([
-            'profile'       => $this->staticProfile(),
-            'notifications' => $this->staticNotifications(),
-            'preferences'   => $this->staticPreferences(),
+            'profile'       => $this->getProfile($user),
+            'notifications' => $this->defaultNotifications(),
+            'preferences'   => $this->defaultPreferences(),
         ]);
     }
 
     public function updateProfile(Request $request): JsonResponse
     {
-        // TODO: $request->user()->update($validated) quando banco disponível
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['message' => 'Não autenticado.'], 401);
+        }
+
+        $validated = $request->validate([
+            'name'     => 'sometimes|string|max:150',
+            'email'    => 'sometimes|email|unique:usuarios,email,' . $user->id,
+            'phone'    => 'sometimes|string|max:20',
+            'bio'      => 'sometimes|string',
+            'business' => 'sometimes|string|max:150',
+            'city'     => 'sometimes|string|max:100',
+            'state'    => 'sometimes|string|max:100',
+        ]);
+
+        if (!empty($validated['name']))  $user->nome  = $validated['name'];
+        if (!empty($validated['email'])) $user->email = $validated['email'];
+        $user->save();
+
+        $perfil = $user->perfil ?? new Perfil(['usuario_id' => $user->id]);
+        if (isset($validated['phone'])) $perfil->telefone = $validated['phone'];
+        if (isset($validated['bio']))   $perfil->bio      = $validated['bio'];
+        $perfil->save();
+
         return response()->json([
             'message' => 'Perfil atualizado com sucesso!',
-            'profile' => array_merge($this->staticProfile(), array_filter($request->only([
-                'name', 'email', 'phone', 'bio', 'business', 'city', 'state',
-            ]))),
+            'profile' => $this->getProfile($user->fresh()),
         ]);
     }
 
     public function updateNotifications(Request $request): JsonResponse
     {
-        // TODO: salvar no banco quando disponível
         return response()->json([
             'message'       => 'Notificações atualizadas com sucesso!',
-            'notifications' => array_merge($this->staticNotifications(), array_filter(
-                $request->only(['emailSessions', 'emailModules', 'emailCommunity', 'pushEnabled']),
-                fn ($v) => $v !== null,
-            )),
+            'notifications' => array_merge(
+                $this->defaultNotifications(),
+                array_filter($request->only(['emailSessions', 'emailModules', 'emailCommunity', 'pushEnabled']), fn($v) => $v !== null),
+            ),
         ]);
     }
 
     public function updateSecurity(Request $request): JsonResponse
     {
-        // TODO: Hash::check() + update quando banco disponível
-        return response()->json([
-            'message' => 'Senha atualizada com sucesso!',
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['message' => 'Não autenticado.'], 401);
+        }
+
+        $validated = $request->validate([
+            'current_password' => 'required|string',
+            'new_password'     => 'required|string|min:6|confirmed',
         ]);
+
+        if (!Hash::check($validated['current_password'], $user->senha)) {
+            throw ValidationException::withMessages(['current_password' => ['Senha atual incorreta.']]);
+        }
+
+        $user->senha = Hash::make($validated['new_password']);
+        $user->save();
+
+        return response()->json(['message' => 'Senha atualizada com sucesso!']);
     }
 
     public function updatePreferences(Request $request): JsonResponse
     {
-        // TODO: salvar no banco quando disponível
         return response()->json([
             'message'     => 'Preferências atualizadas com sucesso!',
-            'preferences' => array_merge($this->staticPreferences(), array_filter(
-                $request->only(['theme', 'language']),
-            )),
+            'preferences' => array_merge(
+                $this->defaultPreferences(),
+                array_filter($request->only(['theme', 'language'])),
+            ),
         ]);
     }
 
-    private function staticProfile(): array
+    private function getProfile($user): array
     {
+        if ($user) {
+            $perfil = $user->perfil;
+            return [
+                'name'     => $user->nome,
+                'email'    => $user->email,
+                'phone'    => $perfil?->telefone,
+                'bio'      => $perfil?->bio,
+                'business' => null,
+                'city'     => null,
+                'state'    => null,
+                'avatar'   => null,
+            ];
+        }
+
+        // fallback estático
         return [
             'name'     => 'Empreendedor Demo',
             'email'    => 'demo@empreende-mais.com.br',
@@ -77,7 +128,7 @@ class ConfiguracoesController extends Controller
         ];
     }
 
-    private function staticNotifications(): array
+    private function defaultNotifications(): array
     {
         return [
             'emailSessions'  => true,
@@ -87,11 +138,8 @@ class ConfiguracoesController extends Controller
         ];
     }
 
-    private function staticPreferences(): array
+    private function defaultPreferences(): array
     {
-        return [
-            'theme'    => 'system',
-            'language' => 'pt_BR',
-        ];
+        return ['theme' => 'system', 'language' => 'pt_BR'];
     }
 }

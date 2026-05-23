@@ -2,59 +2,79 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, Notifiable;
+
+    protected $table = 'usuarios';
+
+    protected $rememberTokenName = false;
+
+    const CREATED_AT = 'criado_em';
+    const UPDATED_AT = null;
 
     protected $fillable = [
-        'name',
+        'nome',
         'email',
-        'password',
-        'avatar',
-        'bio',
-        'phone',
-        'business',
-        'city',
-        'state',
+        'senha',
+        'tipo_usuario',
     ];
 
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
+    protected $hidden = ['senha'];
 
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
-            'password'          => 'hashed',
+            'criado_em' => 'datetime',
         ];
     }
 
-    public function modules(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    public function getAuthPasswordName(): string
     {
-        return $this->belongsToMany(Module::class, 'user_modules')
-            ->withPivot(['progress', 'status', 'completed_at'])
-            ->withTimestamps();
+        return 'senha';
     }
 
-    public function sessions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function perfil(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
-        return $this->hasMany(MentoringSession::class);
+        return $this->hasOne(Perfil::class, 'usuario_id');
     }
 
-    public function certificates(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function perfilMentor(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
-        return $this->hasMany(Certificate::class);
+        return $this->hasOne(PerfilMentor::class, 'usuario_id');
     }
 
-    public function discussions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function trilhasUsuario(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        return $this->hasMany(Discussion::class);
+        return $this->hasMany(TrilhaUsuario::class, 'usuario_id');
+    }
+
+    public function sessoesComoAluno(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(SessaoMentoria::class, 'aluno_id');
+    }
+
+    public function sessoesComoMentor(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(SessaoMentoria::class, 'mentor_id');
+    }
+
+    public function certificados(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Certificado::class, 'usuario_id');
+    }
+
+    public function posts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PostForum::class, 'usuario_id');
+    }
+
+    public function empresa(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Empresa::class, 'usuario_id');
     }
 }

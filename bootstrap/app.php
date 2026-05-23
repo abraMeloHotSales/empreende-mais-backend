@@ -12,10 +12,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // Sanctum reativado aqui quando o banco de dados estiver configurado:
-        // $middleware->api(prepend: [
-        //     \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
-        // ]);
+        $middleware->api(prepend: [
+            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

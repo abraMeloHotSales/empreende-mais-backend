@@ -3,62 +3,103 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Models\Perfil;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
-/*
- * TODO (quando banco estiver configurado):
- *  - Reativar User::create(), Auth::attempt(), $user->createToken()
- *  - Reativar validações únicas (unique:users)
- *  - Reativar $request->user() nas rotas protegidas
- */
 class AuthController extends Controller
 {
-    private function staticUser(): array
+    private function formatUser(User $user): array
     {
+        $perfil = $user->perfil;
         return [
-            'id'       => 1,
-            'name'     => 'Empreendedor Demo',
-            'email'    => 'demo@empreende-mais.com.br',
-            'avatar'   => null,
-            'bio'      => 'Usuário de demonstração da plataforma Empreende+',
-            'business' => 'Meu Negócio LTDA',
-            'city'     => 'Belo Horizonte',
-            'state'    => 'MG',
+            'id'            => $user->id,
+            'name'          => $user->nome,
+            'email'         => $user->email,
+            'tipo_usuario'  => $user->tipo_usuario,
+            'avatar'        => null,
+            'bio'           => $perfil?->bio,
+            'phone'         => $perfil?->telefone,
+            'business'      => null,
+            'city'          => null,
+            'state'         => null,
         ];
     }
 
     public function register(Request $request): JsonResponse
     {
-        // TODO: User::create([...]) quando banco disponível
+        $validated = $request->validate([
+            'name'         => 'required|string|max:150',
+            'email'        => 'required|email|unique:usuarios,email',
+            'password'     => 'required|string|min:6',
+            'tipo_usuario' => 'sometimes|string|max:50',
+        ]);
+
+        $user = User::create([
+            'nome'         => $validated['name'],
+            'email'        => $validated['email'],
+            'senha'        => Hash::make($validated['password']),
+            'tipo_usuario' => $validated['tipo_usuario'] ?? 'empreendedor',
+        ]);
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+
         return response()->json([
             'message' => 'Cadastro realizado com sucesso!',
-            'user'    => $this->staticUser(),
-            'token'   => 'static-token-demo',
+            'user'    => $this->formatUser($user),
+            'token'   => $token,
         ], 201);
     }
 
     public function login(Request $request): JsonResponse
     {
-        // TODO: Auth::attempt() quando banco disponível
+        $validated = $request->validate([
+            'email'    => 'required|email',
+            'password' => 'required|string',
+        ]);
+
+        $user = User::where('email', $validated['email'])->first();
+
+        if (!$user || !Hash::check($validated['password'], $user->senha)) {
+            throw ValidationException::withMessages([
+                'email' => ['Credenciais inválidas.'],
+            ]);
+        }
+
+        $user->tokens()->delete();
+        $token = $user->createToken('auth_token')->plainTextToken;
+
         return response()->json([
             'message' => 'Login realizado com sucesso!',
-            'user'    => $this->staticUser(),
-            'token'   => 'static-token-demo',
+            'user'    => $this->formatUser($user),
+            'token'   => $token,
         ]);
     }
 
     public function me(Request $request): JsonResponse
     {
-        // TODO: return $request->user() quando banco disponível
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['message' => 'Não autenticado.'], 401);
+        }
+
         return response()->json([
-            'user' => $this->staticUser(),
+            'user' => $this->formatUser($user),
         ]);
     }
 
     public function logout(Request $request): JsonResponse
     {
-        // TODO: $request->user()->currentAccessToken()->delete() quando banco disponível
+        $user = $request->user();
+
+        if ($user) {
+            $user->currentAccessToken()->delete();
+        }
+
         return response()->json([
             'message' => 'Logout realizado com sucesso!',
         ]);
@@ -66,12 +107,40 @@ class AuthController extends Controller
 
     public function updateProfile(Request $request): JsonResponse
     {
-        // TODO: $request->user()->update([...]) quando banco disponível
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['message' => 'Não autenticado.'], 401);
+        }
+
+        $validated = $request->validate([
+            'name'  => 'sometimes|string|max:150',
+            'email' => 'sometimes|email|unique:usuarios,email,' . $user->id,
+            'phone' => 'sometimes|string|max:20',
+            'bio'   => 'sometimes|string',
+        ]);
+
+        if (isset($validated['name'])) {
+            $user->nome = $validated['name'];
+            $user->save();
+        }
+        if (isset($validated['email'])) {
+            $user->email = $validated['email'];
+            $user->save();
+        }
+
+        $perfil = $user->perfil ?? new Perfil(['usuario_id' => $user->id]);
+        if (isset($validated['phone'])) {
+            $perfil->telefone = $validated['phone'];
+        }
+        if (isset($validated['bio'])) {
+            $perfil->bio = $validated['bio'];
+        }
+        $perfil->save();
+
         return response()->json([
             'message' => 'Perfil atualizado com sucesso!',
-            'user'    => array_merge($this->staticUser(), $request->only([
-                'name', 'email', 'phone', 'bio', 'business', 'city', 'state',
-            ])),
+            'user'    => $this->formatUser($user->fresh()),
         ]);
     }
 
