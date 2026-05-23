@@ -6,7 +6,8 @@ RUN apt-get update \
         unzip \
         libzip-dev \
         libsqlite3-dev \
-    && docker-php-ext-install zip pdo pdo_sqlite bcmath \
+        libmariadb-dev-compat \
+    && docker-php-ext-install zip pdo pdo_sqlite pdo_mysql bcmath \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
