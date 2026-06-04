@@ -34,8 +34,16 @@ class AuthController extends Controller
         $validated = $request->validate([
             'name'         => 'required|string|max:150',
             'email'        => 'required|email|unique:usuarios,email',
-            'password'     => 'required|string|min:6',
+            'password'     => 'required|string|min:6|confirmed',
             'tipo_usuario' => 'sometimes|string|max:50',
+        ], [
+            'name.required'      => 'Informe seu nome.',
+            'email.required'     => 'Informe seu e-mail.',
+            'email.email'        => 'Informe um e-mail válido.',
+            'email.unique'       => 'Este e-mail já está cadastrado.',
+            'password.required'  => 'Informe uma senha.',
+            'password.min'       => 'A senha deve ter no mínimo 6 caracteres.',
+            'password.confirmed' => 'As senhas não conferem.',
         ]);
 
         $user = User::create([
@@ -81,24 +89,14 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        $user = $request->user();
-
-        if (!$user) {
-            return response()->json(['message' => 'Não autenticado.'], 401);
-        }
-
         return response()->json([
-            'user' => $this->formatUser($user),
+            'user' => $this->formatUser($request->user()),
         ]);
     }
 
     public function logout(Request $request): JsonResponse
     {
-        $user = $request->user();
-
-        if ($user) {
-            $user->currentAccessToken()->delete();
-        }
+        $request->user()->currentAccessToken()->delete();
 
         return response()->json([
             'message' => 'Logout realizado com sucesso!',
